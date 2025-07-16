@@ -1,178 +1,113 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Color Wheel Spinner</title>
+  <title>Spin Wheel Shared State</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin-top: 30px;
-    }
-    #wheel {
-      margin: 0 auto;
-      width: 300px;
-      height: 300px;
-      border-radius: 50%;
-      border: 8px solid #333;
-      position: relative;
-      overflow: hidden;
-      box-shadow: 0 0 20px rgba(0,0,0,0.3);
-      transition: transform 4s cubic-bezier(0.33, 1, 0.68, 1);
-    }
-    .segment {
-      width: 50%;
-      height: 50%;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform-origin: 0% 0%;
-    }
-    #pointer {
-      width: 0;
-      height: 0;
-      border-left: 20px solid transparent;
-      border-right: 20px solid transparent;
-      border-bottom: 30px solid red;
-      margin: 20px auto;
-    }
-    #spinBtn {
-      margin-top: 20px;
-      font-size: 18px;
-      padding: 10px 25px;
-      cursor: pointer;
-    }
-    #result {
-      margin-top: 25px;
-      font-size: 22px;
-      font-weight: bold;
-    }
-    #assignments, #loadedNames {
-      margin-top: 25px;
-      font-size: 18px;
-    }
-    #namesInput {
-      width: 60%;
-      padding: 8px;
-      margin-bottom: 10px;
-    }
-    .color-box {
-      display: inline-block;
-      width: 16px;
-      height: 16px;
-      margin-left: 5px;
-      vertical-align: middle;
-    }
+    .spun { margin-bottom: 1em; }
+    .pending { margin-bottom: 1em; font-style: italic; color: gray; }
+    .color-box { display: inline-block; width: 20px; height: 20px; border: 1px solid #333; margin-right: 5px; }
   </style>
 </head>
 <body>
-
-<h1>Color Wheel Spinner</h1>
-
-<input type="text" id="namesInput" placeholder="Enter names separated by commas" />
-<button onclick="loadNames()">Load Names</button>
-
-<div id="loadedNames"></div>
-
-<div id="pointer"></div>
-<div id="wheel"></div>
-<button id="spinBtn" disabled>Spin the Wheel</button>
-
-<div id="result"></div>
-<div id="assignments"></div>
+  <h1>Spin Wheel</h1>
+  <div>
+    <h2>Spun Results</h2>
+    <div id="spun-list" class="spun"></div>
+    <h2>Pending Names</h2>
+    <div id="pending-list" class="pending"></div>
+  </div>
+  <div>
+    <h3>Spin for...</h3>
+    <select id="name-select"></select>
+    <button id="spin-btn">Spin</button>
+    <div id="spin-result"></div>
+  </div>
 
 <script>
-  const colors = ["Red", "Blue", "Green", "Yellow", "Purple", "Orange", "Pink", "Black", "White"].slice(0, 9); // limit to 9
-  let names = [];
-  let assigned = {};
-  let remainingNames = [];
-  let remainingColors = [...colors];
+const owner = 'imkhairulikhwan';
+const repo = 'spin-wheel';
+const resultsFile = 'spin-results.json';
+// !! DO NOT USE THIS IN PRODUCTION !!
+const githubToken = 'YOUR_GITHUB_TOKEN'; // Replace with your token for demo/testing
 
-  const wheel = document.getElementById('wheel');
-  const result = document.getElementById('result');
-  const spinBtn = document.getElementById('spinBtn');
-  const assignmentsDiv = document.getElementById('assignments');
-  const loadedNamesDiv = document.getElementById('loadedNames');
+const allColors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'brown', 'teal'];
 
-  function createWheel() {
-    wheel.innerHTML = '';
-    const numSegments = colors.length;
-    const angle = 360 / numSegments;
-    for (let i = 0; i < numSegments; i++) {
-      const segment = document.createElement('div');
-      segment.className = 'segment';
-      segment.style.backgroundColor = colors[i];
-      segment.style.transform = `rotate(${i * angle}deg) skewY(${90 - angle}deg)`;
-      wheel.appendChild(segment);
-    }
-  }
+async function fetchSpinResults() {
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${resultsFile}`);
+  if (!res.ok) throw new Error('Could not fetch results file');
+  const data = await res.json();
+  const content = atob(data.content);
+  return { ...JSON.parse(content), sha: data.sha };
+}
 
-  function loadNames() {
-    const input = document.getElementById('namesInput').value;
-    names = input.split(',').map(name => name.trim()).filter(name => name);
-    if (names.length > colors.length) {
-      alert("Too many names. Max allowed is " + colors.length);
-      return;
-    }
-    assigned = {};
-    remainingNames = [...names];
-    remainingColors = [...colors];
-    assignmentsDiv.innerHTML = '';
-    result.textContent = '';
-    spinBtn.disabled = false;
+function renderResults({ spun, pending }) {
+  const spunDiv = document.getElementById('spun-list');
+  spunDiv.innerHTML = spun.map(s => `<div><span class="color-box" style="background:${s.color}"></span> ${s.name}</div>`).join('');
+  const pendingDiv = document.getElementById('pending-list');
+  pendingDiv.innerHTML = pending.length ? pending.join(', ') : 'All have spun!';
+  const select = document.getElementById('name-select');
+  select.innerHTML = pending.map(name => `<option value="${name}">${name}</option>`).join('');
+}
 
-    // Show loaded names
-    loadedNamesDiv.innerHTML = `<h3>Loaded Names (${names.length}):</h3><ul>` +
-      names.map(name => `<li>${name}</li>`).join('') + `</ul>`;
-
-    createWheel();
-  }
-
-  let spinning = false;
-
-  spinBtn.addEventListener('click', () => {
-    if (spinning || remainingNames.length === 0 || remainingColors.length === 0) return;
-
-    spinning = true;
-    result.textContent = '';
-
-    const randomSpin = Math.floor(Math.random() * 360) + 360 * (3 + Math.floor(Math.random() * 3));
-    wheel.style.transition = 'transform 4s cubic-bezier(0.33, 1, 0.68, 1)';
-    wheel.style.transform = `rotate(${randomSpin}deg)`;
-
-    setTimeout(() => {
-      spinning = false;
-
-      const normalizedDeg = randomSpin % 360;
-      const segmentAngle = 360 / colors.length;
-      const index = Math.floor((360 - normalizedDeg + segmentAngle / 2) % 360 / segmentAngle);
-      const selectedColor = colors[index];
-
-      if (!remainingColors.includes(selectedColor)) {
-        result.textContent = `${selectedColor} was already assigned. Spin again.`;
-        return;
-      }
-
-      const name = remainingNames.shift();
-      assigned[name] = selectedColor;
-      remainingColors = remainingColors.filter(c => c !== selectedColor);
-
-      result.textContent = `${name} is assigned ${selectedColor}!`;
-
-      // Update assignment list
-      const htmlList = Object.entries(assigned).map(([n, c]) =>
-        `<div><strong>${n}</strong> ➜ <span style="color:${c}">${c}</span> <span class="color-box" style="background-color:${c}"></span></div>`
-      );
-      assignmentsDiv.innerHTML = `<h3>Assignments:</h3>` + htmlList.join("");
-
-      if (remainingNames.length === 0) {
-        spinBtn.disabled = true;
-        result.textContent += " All names assigned.";
-      }
-    }, 4000);
+async function updateSpinResults(newResults, sha) {
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${resultsFile}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `token ${githubToken}`,
+      'Accept': 'application/vnd.github.v3+json'
+    },
+    body: JSON.stringify({
+      message: 'Update spin results',
+      content: btoa(JSON.stringify(newResults, null, 2)),
+      sha
+    })
   });
-</script>
+  if (!res.ok) throw new Error('Failed to update results');
+  return await res.json();
+}
 
+async function spin() {
+  document.getElementById('spin-btn').disabled = true;
+  try {
+    // Fetch current state
+    const results = await fetchSpinResults();
+    const { spun, pending, sha } = results;
+    const name = document.getElementById('name-select').value;
+
+    // Assign available color
+    const usedColors = spun.map(s => s.color);
+    const availableColors = allColors.filter(c => !usedColors.includes(c));
+    const color = availableColors.length ? availableColors[0] : 'gray';
+
+    // Update state
+    const newSpun = [...spun, { name, color }];
+    const newPending = pending.filter(n => n !== name);
+    const newResults = { spun: newSpun, pending: newPending };
+
+    // Update remote JSON
+    await updateSpinResults(newResults, sha);
+    renderResults(newResults);
+
+    document.getElementById('spin-result').innerHTML = 
+      `<b>${name}</b> spun and got color <span class="color-box" style="background:${color}"></span> ${color}`;
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+  document.getElementById('spin-btn').disabled = false;
+}
+
+async function init() {
+  try {
+    const results = await fetchSpinResults();
+    renderResults(results);
+
+    document.getElementById('spin-btn').onclick = spin;
+  } catch (e) {
+    alert('Could not load results file. Please create spin-results.json in the repo with initial content.');
+  }
+}
+
+init();
+</script>
 </body>
 </html>
