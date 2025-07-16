@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Color Wheel Spinner</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 30px;
+    }
+    #wheel {
+      margin: 0 auto;
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      border: 8px solid #333;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0,0,0,0.3);
+      transition: transform 4s cubic-bezier(0.33, 1, 0.68, 1);
+    }
+    .segment {
+      width: 50%;
+      height: 50%;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform-origin: 0% 0%;
+    }
+    #pointer {
+      width: 0;
+      height: 0;
+      border-left: 20px solid transparent;
+      border-right: 20px solid transparent;
+      border-bottom: 30px solid red;
+      margin: 20px auto;
+    }
+    #spinBtn {
+      margin-top: 20px;
+      font-size: 18px;
+      padding: 10px 25px;
+      cursor: pointer;
+    }
+    #result {
+      margin-top: 25px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    #assignments, #loadedNames {
+      margin-top: 25px;
+      font-size: 18px;
+    }
+    #namesInput {
+      width: 60%;
+      padding: 8px;
+      margin-bottom: 10px;
+    }
+    .color-box {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      margin-left: 5px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Color Wheel Spinner</h1>
+
+<input type="text" id="namesInput" placeholder="Enter names separated by commas" />
+<button onclick="loadNames()">Load Names</button>
+
+<div id="loadedNames"></div>
+
+<div id="pointer"></div>
+<div id="wheel"></div>
+<button id="spinBtn" disabled>Spin the Wheel</button>
+
+<div id="result"></div>
+<div id="assignments"></div>
+
+<script>
+  const colors = ["Red", "Blue", "Green", "Yellow", "Purple", "Orange", "Pink", "Black", "White"].slice(0, 9); // limit to 9
+  let names = [];
+  let assigned = {};
+  let remainingNames = [];
+  let remainingColors = [...colors];
+
+  const wheel = document.getElementById('wheel');
+  const result = document.getElementById('result');
+  const spinBtn = document.getElementById('spinBtn');
+  const assignmentsDiv = document.getElementById('assignments');
+  const loadedNamesDiv = document.getElementById('loadedNames');
+
+  function createWheel() {
+    wheel.innerHTML = '';
+    const numSegments = colors.length;
+    const angle = 360 / numSegments;
+    for (let i = 0; i < numSegments; i++) {
+      const segment = document.createElement('div');
+      segment.className = 'segment';
+      segment.style.backgroundColor = colors[i];
+      segment.style.transform = `rotate(${i * angle}deg) skewY(${90 - angle}deg)`;
+      wheel.appendChild(segment);
+    }
+  }
+
+  function loadNames() {
+    const input = document.getElementById('namesInput').value;
+    names = input.split(',').map(name => name.trim()).filter(name => name);
+    if (names.length > colors.length) {
+      alert("Too many names. Max allowed is " + colors.length);
+      return;
+    }
+    assigned = {};
+    remainingNames = [...names];
+    remainingColors = [...colors];
+    assignmentsDiv.innerHTML = '';
+    result.textContent = '';
+    spinBtn.disabled = false;
+
+    // Show loaded names
+    loadedNamesDiv.innerHTML = `<h3>Loaded Names (${names.length}):</h3><ul>` +
+      names.map(name => `<li>${name}</li>`).join('') + `</ul>`;
+
+    createWheel();
+  }
+
+  let spinning = false;
+
+  spinBtn.addEventListener('click', () => {
+    if (spinning || remainingNames.length === 0 || remainingColors.length === 0) return;
+
+    spinning = true;
+    result.textContent = '';
+
+    const randomSpin = Math.floor(Math.random() * 360) + 360 * (3 + Math.floor(Math.random() * 3));
+    wheel.style.transition = 'transform 4s cubic-bezier(0.33, 1, 0.68, 1)';
+    wheel.style.transform = `rotate(${randomSpin}deg)`;
+
+    setTimeout(() => {
+      spinning = false;
+
+      const normalizedDeg = randomSpin % 360;
+      const segmentAngle = 360 / colors.length;
+      const index = Math.floor((360 - normalizedDeg + segmentAngle / 2) % 360 / segmentAngle);
+      const selectedColor = colors[index];
+
+      if (!remainingColors.includes(selectedColor)) {
+        result.textContent = `${selectedColor} was already assigned. Spin again.`;
+        return;
+      }
+
+      const name = remainingNames.shift();
+      assigned[name] = selectedColor;
+      remainingColors = remainingColors.filter(c => c !== selectedColor);
+
+      result.textContent = `${name} is assigned ${selectedColor}!`;
+
+      // Update assignment list
+      const htmlList = Object.entries(assigned).map(([n, c]) =>
+        `<div><strong>${n}</strong> ➜ <span style="color:${c}">${c}</span> <span class="color-box" style="background-color:${c}"></span></div>`
+      );
+      assignmentsDiv.innerHTML = `<h3>Assignments:</h3>` + htmlList.join("");
+
+      if (remainingNames.length === 0) {
+        spinBtn.disabled = true;
+        result.textContent += " All names assigned.";
+      }
+    }, 4000);
+  });
+</script>
+
+</body>
+</html>
