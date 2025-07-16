@@ -24,22 +24,26 @@
   </div>
 
 <script>
-const owner = 'imkhairulikhwan';
-const repo = 'spin-wheel';
+// ---- CONFIGURE THESE ----
+const gistId = 'c1183723ec318d5b37d9843916709ea9'; // e.g. 'a1b2c3d4e5f6g7h8i9j0'
+const gistUsername = 'imkhairulikhwan'; // e.g. 'imkhairulikhwan'
 const resultsFile = 'spin-results.json';
 // !! DO NOT USE THIS IN PRODUCTION !!
-const githubToken = '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'; // Replace with your token for demo/testing
+const githubToken = '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'; // Replace with your token for demo/testing
+// -------------------------
 
 const allColors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'brown', 'teal'];
 
+// Fetch spin-results.json from the Gist (read-only)
 async function fetchSpinResults() {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${resultsFile}`);
-  if (!res.ok) throw new Error('Could not fetch results file');
+  const rawUrl = `https://gist.githubusercontent.com/${gistUsername}/${gistId}/raw/${resultsFile}`;
+  const res = await fetch(rawUrl);
+  if (!res.ok) throw new Error('Could not fetch results file from Gist');
   const data = await res.json();
-  const content = atob(data.content);
-  return { ...JSON.parse(content), sha: data.sha };
+  return data;
 }
 
+// Render results
 function renderResults({ spun, pending }) {
   const spunDiv = document.getElementById('spun-list');
   spunDiv.innerHTML = spun.map(s => `<div><span class="color-box" style="background:${s.color}"></span> ${s.name}</div>`).join('');
@@ -49,29 +53,35 @@ function renderResults({ spun, pending }) {
   select.innerHTML = pending.map(name => `<option value="${name}">${name}</option>`).join('');
 }
 
-async function updateSpinResults(newResults, sha) {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${resultsFile}`, {
-    method: 'PUT',
+// Update the spin-results.json in the Gist (write)
+async function updateSpinResults(newResults) {
+  const apiUrl = `https://api.github.com/gists/${gistId}`;
+  const body = {
+    files: {
+      [resultsFile]: {
+        content: JSON.stringify(newResults, null, 2)
+      }
+    }
+  };
+  const res = await fetch(apiUrl, {
+    method: 'PATCH',
     headers: {
       'Authorization': `token ${githubToken}`,
       'Accept': 'application/vnd.github.v3+json'
     },
-    body: JSON.stringify({
-      message: 'Update spin results',
-      content: btoa(JSON.stringify(newResults, null, 2)),
-      sha
-    })
+    body: JSON.stringify(body)
   });
-  if (!res.ok) throw new Error('Failed to update results');
+  if (!res.ok) throw new Error('Failed to update Gist results');
   return await res.json();
 }
 
+// Spin action
 async function spin() {
   document.getElementById('spin-btn').disabled = true;
   try {
-    // Fetch current state
+    // Fetch current state from Gist
     const results = await fetchSpinResults();
-    const { spun, pending, sha } = results;
+    const { spun, pending } = results;
     const name = document.getElementById('name-select').value;
 
     // Assign available color
@@ -84,11 +94,11 @@ async function spin() {
     const newPending = pending.filter(n => n !== name);
     const newResults = { spun: newSpun, pending: newPending };
 
-    // Update remote JSON
-    await updateSpinResults(newResults, sha);
+    // Update remote JSON in Gist
+    await updateSpinResults(newResults);
     renderResults(newResults);
 
-    document.getElementById('spin-result').innerHTML = 
+    document.getElementById('spin-result').innerHTML =
       `<b>${name}</b> spun and got color <span class="color-box" style="background:${color}"></span> ${color}`;
   } catch (e) {
     alert('Error: ' + e.message);
@@ -96,14 +106,14 @@ async function spin() {
   document.getElementById('spin-btn').disabled = false;
 }
 
+// Initialize page and bind events
 async function init() {
   try {
     const results = await fetchSpinResults();
     renderResults(results);
-
     document.getElementById('spin-btn').onclick = spin;
   } catch (e) {
-    alert('Could not load results file. Please create spin-results.json in the repo with initial content.');
+    alert('Could not load results file from Gist. Please create spin-results.json in your Gist with initial content.');
   }
 }
 
